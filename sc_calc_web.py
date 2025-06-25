@@ -1,9 +1,8 @@
 import streamlit as st
 import pandas as pd
-import os
+import io
 from openpyxl import Workbook
 from openpyxl.utils.dataframe import dataframe_to_rows
-import io
 
 class SCCalculator:
     def __init__(self):
@@ -11,27 +10,52 @@ class SCCalculator:
         st.set_page_config(page_title="短路电流计算器", layout="wide")
         st.title("短路电流计算器")
 
-        # Initialize session state for storing results
+        # Initialize session state
         if 'result_dfs' not in st.session_state:
             st.session_state.result_dfs = {}
-        if 'files_uploaded' not in st.session_state:
-            st.session_state.files_uploaded = False
+        if 'bus_names' not in st.session_state:
+            st.session_state.bus_names = []
+        if 'files_loaded' not in st.session_state:
+            st.session_state.files_loaded = False
+        if 'ds_input' not in st.session_state:
+            st.session_state.ds_input = ""
+        if 'ds1_input' not in st.session_state:
+            st.session_state.ds1_input = ""
 
         # File uploader
         st.subheader("上传CSV文件")
-        self.uploaded_files = st.file_uploader("选择CSV文件", type=["csv"], accept_multiple_files=True)
+        uploaded_files = st.file_uploader("选择CSV文件", type=["csv"], accept_multiple_files=True)
+
+        # Process files when uploaded
+        if uploaded_files and not st.session_state.files_loaded:
+            self.load_files(uploaded_files)
 
         # DS and DS1 inputs
-        st.subheader("输入参数")
-        col1, col2 = st.columns(2)
-        with col1:
-            self.ds_input = st.text_input("母线名 (DS, 逗号分隔):", placeholder="例如: DS1,DS2,DS3")
-        with col2:
-            self.ds1_input = st.text_input("显示名称 (DS1, 逗号分隔):", placeholder="例如: Name1,Name2,Name3")
+        if st.session_state.files_loaded:
+            st.subheader("输入参数")
+            col1, col2 = st.columns(2)
 
-        # Calculate button
-        if st.button("计算"):
-            self.calculate()
+            with col1:
+                st.write("母线名 (DS, 逗号分隔):")
+                ds_input = st.text_input("DS输入", value=st.session_state.ds_input, key="ds_input_field")
+                # Single suggestion dropdown for DS
+                st.write("建议选择:")
+                st.selectbox("选择母线名以复制到DS输入", [""] + st.session_state.bus_names, key="ds_suggest")
+
+            with col2:
+                st.write("显示名称 (DS1, 逗号分隔):")
+                ds1_input = st.text_input("DS1输入", value=st.session_state.ds1_input, key="ds1_input_field")
+
+            # Store inputs
+            st.session_state.ds_input = ds_input
+            st.session_state.ds1_input = ds1_input
+            self.ds_input = ds_input
+            self.ds1_input = ds1_input
+            self.uploaded_files = uploaded_files
+
+            # Calculate button
+            if st.button("计算"):
+                self.calculate()
 
         # Display results
         if st.session_state.result_dfs:
@@ -50,8 +74,27 @@ class SCCalculator:
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
             )
 
+    def load_files(self, uploaded_files):
+        """Load CSV files and extract unique bus names."""
+        with st.spinner("正在加载文件..."):
+            bus_names = set()
+            for uploaded_file in uploaded_files:
+                try:
+                    df = pd.read_csv(uploaded_file, encoding='gbk', index_col=False)
+                    if '母线名' in df.columns:
+                        bus_names.update(df['母线名'].dropna().astype(str).unique())
+                    else:
+                        st.warning(f"文件 {uploaded_file.name} 缺少 '母线名' 列")
+                except Exception as e:
+                    st.error(f"加载文件 {uploaded_file.name} 失败: {str(e)}")
+                    return
+            st.session_state.bus_names = sorted(list(bus_names))
+            st.session_state.files_loaded = True
+            st.session_state.uploaded_files = uploaded_files
+            st.success("文件加载完成！请在下方输入DS和DS1。")
+
     def calculate(self):
-        if not self.uploaded_files:
+        if not st.session_state.uploaded_files:
             st.error("请先上传CSV文件")
             return
 
@@ -67,12 +110,12 @@ class SCCalculator:
             return
 
         st.session_state.result_dfs.clear()
-        st.session_state.files_uploaded = True
 
-        for uploaded_file in self.uploaded_files:
+        for uploaded_file in st.session_state.uploaded_files:
             file_name = uploaded_file.name
             try:
-                # Read CSV from uploaded file
+                # Reset file pointer and read CSV
+                uploaded_file.seek(0)
                 sccp = pd.read_csv(uploaded_file, encoding='gbk', index_col=False)
                 required_columns = ['母线名', '故障类型']
                 if not all(col in sccp.columns for col in required_columns):
