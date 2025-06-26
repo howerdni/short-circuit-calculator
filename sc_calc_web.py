@@ -21,13 +21,25 @@ class SCCalculator:
             st.session_state.ds_input = ""
         if 'ds1_input' not in st.session_state:
             st.session_state.ds1_input = ""
+        if 'uploaded_files' not in st.session_state:
+            st.session_state.uploaded_files = []
 
         # File uploader
         st.subheader("上传CSV文件")
         uploaded_files = st.file_uploader("选择CSV文件", type=["csv"], accept_multiple_files=True)
 
-        # Process files when uploaded
-        if uploaded_files and not st.session_state.files_loaded:
+        # Handle file removal or new uploads
+        if not uploaded_files and st.session_state.uploaded_files:
+            # Files were removed (e.g., via "X" button)
+            st.session_state.files_loaded = False
+            st.session_state.uploaded_files = []
+            st.session_state.bus_names = []
+            st.session_state.result_dfs = {}
+            st.session_state.ds_input = ""
+            st.session_state.ds1_input = ""
+            st.info("已移除所有文件，请上传新文件以继续。")
+        elif uploaded_files and uploaded_files != st.session_state.uploaded_files:
+            # New or different files uploaded
             self.load_files(uploaded_files)
 
         # DS and DS1 inputs
@@ -91,6 +103,9 @@ class SCCalculator:
             st.session_state.bus_names = sorted(list(bus_names))
             st.session_state.files_loaded = True
             st.session_state.uploaded_files = uploaded_files
+            st.session_state.result_dfs = {}  # Clear previous results
+            st.session_state.ds_input = ""   # Clear DS input
+            st.session_state.ds1_input = ""  # Clear DS1 input
             st.success("文件加载完成！请在下方输入DS和DS1。")
 
     def calculate(self):
