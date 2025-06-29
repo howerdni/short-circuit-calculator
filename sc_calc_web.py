@@ -38,8 +38,6 @@ class SCCalculator:
             st.session_state.uploaded_files = []
             st.session_state.bus_names = []
             st.session_state.result_dfs = {}
-            st.session_state.ds_input = ""
-            st.session_state.ds1_input = ""
             st.session_state.selected_bus = ""
             st.info("已移除所有文件，请上传新文件以继续。")
         elif uploaded_files and uploaded_files != st.session_state.uploaded_files:
@@ -53,8 +51,13 @@ class SCCalculator:
         with col1:
             st.write("母线名 (DS, 逗号分隔):")
             st.text_input("DS输入", value=st.session_state.ds_input, key="ds_input_field")
-            st.caption("可用中文逗号（，）或英文逗号（,）分隔")
+            st.caption("可用中文逗号（，）或英文逗号（,）分隔。提示：使用 Ctrl+A 或 Cmd+A 选择全部文本删除。")
             
+            # Clear DS input button
+            if st.button("清除DS输入", key="clear_ds_button"):
+                st.session_state.ds_input = ""
+                st.rerun()
+
             # Bus name selection (only shown if files are loaded)
             if st.session_state.files_loaded:
                 st.write("选择母线名以追加到DS输入:")
@@ -65,21 +68,17 @@ class SCCalculator:
                     index=0
                 )
 
-                # Function to handle appending
-                def append_to_ds():
+                # Handle append logic directly
+                if st.button("追加到DS", key="append_ds_button"):
                     if selected_bus:
-                        # Use the current text_input value
                         current_ds = st.session_state.get("ds_input_field", "").strip()
                         new_ds = selected_bus if not current_ds else f"{current_ds}，{selected_bus}"
                         st.session_state.ds_input = new_ds
-                        st.write(f"已追加: {selected_bus}，当前DS输入: {new_ds}")
-                        st.session_state.selected_bus = ""  # Reset selection
-                        st.rerun()  # Force UI refresh
+                        st.success(f"已追加: {selected_bus}")
+                        st.session_state.selected_bus = ""
+                        st.rerun()
                     else:
                         st.warning("请先从下拉菜单选择一个母线名")
-
-                # Button to append selected bus name
-                st.button("追加到DS", key="append_ds_button", on_click=append_to_ds)
                 
                 # JavaScript to handle Enter key press
                 st.markdown("""
@@ -104,11 +103,10 @@ class SCCalculator:
             st.write("显示名称 (DS1, 逗号分隔):")
             ds1_input = st.text_input("DS1输入", value=st.session_state.ds1_input, key="ds1_input_field")
             st.caption("可用中文逗号（，）或英文逗号（,）分隔")
-
-            # Store DS1 input
             st.session_state.ds1_input = ds1_input
-            self.ds1_input = ds1_input
-            self.uploaded_files = uploaded_files
+
+        # Update uploaded_files
+        st.session_state.uploaded_files = uploaded_files
 
         # Calculate button
         if st.button("计算"):
@@ -149,8 +147,6 @@ class SCCalculator:
             st.session_state.files_loaded = True
             st.session_state.uploaded_files = uploaded_files
             st.session_state.result_dfs = {}
-            st.session_state.ds_input = ""
-            st.session_state.ds1_input = ""
             st.session_state.selected_bus = ""
             st.success("文件加载完成！请在下方输入DS和DS1。")
 
@@ -158,6 +154,10 @@ class SCCalculator:
         if not st.session_state.uploaded_files:
             st.error("请先上传CSV文件")
             return
+
+        # Synchronize session state with current text input values
+        st.session_state.ds_input = st.session_state.get("ds_input_field", "").strip()
+        st.session_state.ds1_input = st.session_state.get("ds1_input_field", "").strip()
 
         # Split DS and DS1 inputs using both English and Chinese commas
         ds = [x.strip() for x in re.split(r'[,\uFF0C]', st.session_state.ds_input) if x.strip()]
@@ -168,7 +168,7 @@ class SCCalculator:
             return
 
         if len(ds) != len(ds1):
-            st.error("DS和DS1的条目数量必须相同")
+            st.error(f"DS和DS1的条目数量必须相同 (DS: {len(ds)}, DS1: {len(ds1)})")
             return
 
         st.session_state.result_dfs.clear()
